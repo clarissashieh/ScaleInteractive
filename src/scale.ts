@@ -21,18 +21,22 @@ export class Scale extends HTMLElement {
     /// group that contains all of the visual elements
     parent : SVGGElement = document.createElementNS("http://www.w3.org/2000/svg", 'g');
 
-    /// size of the containing element
-    width : number = 700;
-    height : number = 900;
-
-    private major = true;
-    private startNote : number = 0;
+    /// synthesizer for note audio
+    private synth : Synthesizer = new Synthesizer;
+    
+    /// current state
+    static isMajor = true;
+    static startNote : number = 0;
 
     /// scale notes
     static readonly NOTES = ["C", "D", "E", "F", "G", "A", "B"];
-    static MIDI = [60, 62, 64, 65, 67, 69, 71, 72];
-    static MAJOR : number[] = [0, 2, 4, 5, 7, 9, 11, 12];
-    static MINOR : number[] = [0, 2, 3, 5, 7, 8, 10, 12];
+
+    /// corresponding MIDI numbers
+    static readonly MIDI = [60, 62, 64, 65, 67, 69, 71, 72];
+
+    /// MIDI patterns for major and minor scales
+    static readonly MAJOR : number[] = [0, 2, 4, 5, 7, 9, 11, 12];
+    static readonly MINOR : number[] = [0, 2, 3, 5, 7, 8, 10, 12];
     
     /// note wheel element
     private wheel : NoteWheel | null = null;
@@ -53,56 +57,11 @@ export class Scale extends HTMLElement {
         this.container?.setAttribute('viewBox', `0 0 100 1000`);
         console.log(this.container);
         
-        
         // render SVG content
         this.render(true, true);
 
-        // note event listeners
-        const notes = this.root.querySelectorAll('.note');
-        console.log('connected', notes);
-        
         const patch_url = new URL('/assets/sounds/voices/grand-piano/patch.json', import.meta.url);
-        const synth = new Synthesizer(patch_url);
-        notes?.forEach((note) => {
-            note.addEventListener('click', (e) => {
-                console.log('clicked on ' + note.classList);
-                const clickedIndex = Scale.NOTES.findIndex((value) => value === note.classList[1]) - this.startNote;
-                if (this.major) {
-                    synth.playNote(Scale.MIDI[this.startNote] + Scale.MAJOR[clickedIndex]);
-                }
-                else {
-                    synth.playNote(Scale.MIDI[this.startNote] + Scale.MINOR[clickedIndex]);
-                }
-            });
-            
-            let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
-            note.addEventListener('mouseout', (e) => {
-                allNotes?.forEach((letter) => {
-                    if (letter.classList.contains("hover")) letter.classList.remove("hover");
-                });
-            });
-            note.addEventListener('mouseover', (e) => {
-                if (note.classList.contains("wheel")) {
-                    allNotes?.forEach((letter) => {
-                        letter.classList.add("hover");
-                    });
-                }
-                else {
-                    if (note.classList.contains("first")){ 
-                        allNotes = this.root.querySelectorAll(`.${note.classList[1]}.first`);
-                    }
-                    else if (note.classList.contains("last")){ 
-                        allNotes = this.root.querySelectorAll(`.${note.classList[1]}.last`);
-                    }
-                    allNotes?.forEach((letter) => {
-                        letter.classList.add("hover");
-                    });
-    
-                    const wheelNote = this.root.querySelector(`.wheel.${note.classList[1]}`);
-                    if (wheelNote) wheelNote.classList.add("hover");
-                }
-            });
-        });
+        this.synth = new Synthesizer(patch_url);
     }
     
     disconnectedCallback() {
@@ -111,30 +70,72 @@ export class Scale extends HTMLElement {
     attributeChangedCallback(name : string, oldValue : string, newValue : string) {
     }
 
-    update(major: any, note : any) {
-        if (major != null) { 
-            this.major = major;
-            this.render(false, true);
-        }
-        if (note != null) { 
-            this.startNote = Scale.NOTES.indexOf(note);
-            this.render(false, false);
-        }
+    update(major: boolean, note : boolean) {
+        if (major) this.render(false, true);
+        if (note) this.render(false, false);
     }
 
     render(first : boolean, updateMaj : boolean) {
         if (this.container == null) return; // only render once mounted
 
+        // note event listeners
+        const playSound = (e : Event) => {
+            const note = e.currentTarget as Element;
+            let clickedIndex = Scale.NOTES.findIndex((value) => value === note.classList[1]) - Scale.startNote;
+            if (clickedIndex < 0) clickedIndex += 7; 
+            let playSound;
+
+            if (Scale.isMajor) {
+                if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex] + 12;
+                else playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex];  
+            }
+            else {
+                if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex] + 12;
+                else playSound = playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex];
+            }
+            this.synth.playNote(playSound);
+        }
+
+        const addHover = (e : Event) => {
+            const note = e.currentTarget as Element;
+            let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
+            
+            if (note.classList.contains("first")){ 
+                allNotes = this.root.querySelectorAll(`.${note.classList[1]}.first, .wheel.${note.classList[1]}`);
+            }
+            else if (note.classList.contains("last")){ 
+                allNotes = this.root.querySelectorAll(`.${note.classList[1]}.last, .wheel.${note.classList[1]}`);
+            }
+            // else, select both first and last note if applicable
+            allNotes?.forEach((noteInstance) => {
+                noteInstance.classList.add("hover");
+            });
+        };
+
+        const removeHover = (e : Event) => {
+            const note = e.currentTarget as Element;
+            let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
+            allNotes?.forEach((noteInstance) => {
+                noteInstance.classList.remove("hover");
+            });
+        }
+
+        // remove old event listeners
+        this.parent.removeEventListener('click', playSound);
+        this.parent.removeEventListener('pointerleave', addHover);
+        this.parent.removeEventListener('pointerenter', removeHover);
+
+        // remove svg elements
         this.parent.innerHTML = "";
         
         // only render wheel if switching maj/min or new render
         if (updateMaj || first) {
             // generate wheel
-            this.wheel = new NoteWheel(this.major, this.startNote, this);
+            this.wheel = new NoteWheel(this);
             this.parent.append(this.wheel.el);
 
             // generate button
-            this.button = new MajMinButton(this.major, this);
+            this.button = new MajMinButton(this);
             this.parent.append(this.button.el);
         }
         else {
@@ -144,12 +145,20 @@ export class Scale extends HTMLElement {
         }  
 
         // generate staff
-        const staff = new Staff(this.major, this.startNote, this);
+        const staff = new Staff(this);
         this.parent.append(staff.el);
         
         // generate code block
-        const code = new CodeBlock(this.major, this.startNote, this);
+        const code = new CodeBlock(this);
         this.parent.append(code.el);
+
+        // add event listeners
+        const notes = this.root.querySelectorAll('.note');
+        notes?.forEach((note) => {
+            note.addEventListener('click', playSound);
+            note.addEventListener('pointerenter', addHover);
+            note.addEventListener('pointerleave', removeHover);
+        });
     }
 }
 
@@ -169,11 +178,7 @@ class MajMinButton {
     /// visual element for SVG
     el = document.createElementNS("http://www.w3.org/2000/svg", 'g');
 
-    /// is the interactive displaying major scales (default)?
-    private major : boolean;
-
-    constructor(major : boolean, scale : Scale) {
-        this.major = major;
+    constructor(scale : Scale) {
         this.scale = scale;
 
         const rect = document.createElementNS("http://www.w3.org/2000/svg", 'rect');
@@ -193,14 +198,14 @@ class MajMinButton {
         t.setAttribute("x", `${(this.x + this.width) - (this.width / 2)}`);
         t.setAttribute("y", `${(this.y + this.height) - (this.height / 2)}`);
         t.setAttribute("dominant-baseline", "central");
-        t.innerHTML = this.major ? "Major Scales" : "minor scales";
+        t.innerHTML = Scale.isMajor ? "Major Scales" : "minor scales";
         this.el.append(t);
 
-        // set up mouse events
+        // set up pointer events
         this.el.addEventListener('click', (e) => {
-            this.major = !this.major;
-            t.innerHTML = this.major ? "Major Scales" : "minor scales";
-            scale.update(this.major, null);
+            Scale.isMajor = !Scale.isMajor;
+            t.innerHTML = Scale.isMajor ? "Major Scales" : "minor scales";
+            scale.update(true, false);
         });
     }
 }
@@ -208,9 +213,6 @@ class MajMinButton {
 class NoteWheel {
     /// link back to the interactive to generate events
     scale : Scale;
-
-    /// scale notes
-    static readonly NOTES = [ "C", "D", "E", "F", "G", "A", "B" ];
 
     /// center x-coord of wheel
     get cx() : number { return 50; }
@@ -234,19 +236,17 @@ class NoteWheel {
     /// wheel text
     text = document.createElementNS("http://www.w3.org/2000/svg", 'g');
 
-    /// is mouse down?
+    /// is pointer down?
     private down : boolean = false;
-    /// total angle of rotation by user
-    // private totalAngle : number = 0;
 
-    constructor(major : boolean, startNote : number, scale : Scale){
+    constructor(scale : Scale){
         this.scale = scale;
         
         // note that starts on offset angle is note after starting note
-        let currNote = startNote + 1;
+        let currNote = Scale.startNote + 1;
         let noteLetter;
         for (let i = 0; i < this.numSectors; i++) {
-            noteLetter = NoteWheel.NOTES[(currNote + 7) % 7];
+            noteLetter = Scale.NOTES[(currNote + 7) % 7];
             const leftX = this.r * Math.cos(this.angle * (i + 1) + this.offset) + this.cx;
             const leftY = Math.abs(this.r * Math.sin(this.angle * (i + 1) + this.offset) - this.cy);
             const rightX = this.r * Math.cos(this.angle * i + this.offset) + this.cx;
@@ -268,7 +268,7 @@ class NoteWheel {
             t.setAttribute("y", `${((leftY + rightY + this.cy)) / 3}`);
             t.setAttribute("dominant-baseline", "central");
             t.innerHTML = `${noteLetter}`;
-            if (major) t.classList.add("major-text");
+            if (Scale.isMajor) t.classList.add("major-text");
             else t.classList.add("minor-text");
             t.classList.add("wheel-text");
             this.text.append(t);
@@ -322,7 +322,8 @@ class NoteWheel {
             let sectors = this.scale.root.elementsFromPoint(testPoint.x, testPoint.y);
             sectors = sectors.filter((sector) => sector.classList.contains('wheel'));
             if (sectors.length > 0) {
-                scale.update(null, sectors[0].classList.item(1));
+                Scale.startNote = Scale.NOTES.indexOf(sectors[0].classList.item(1)!);
+                scale.update(false, true);
             }
         });
 
@@ -354,9 +355,6 @@ class NoteWheel {
 class Staff {
     /// link back to the entire interactive to generate events
     scale : Scale; 
-
-    /// scale notes
-    static readonly NOTES = ["C", "D", "E", "F", "G", "A", "B"];
     
     /// y-coord of highest staff line
     get max() : number { return 70; }
@@ -372,7 +370,7 @@ class Staff {
     /// visual staff element for SVG
     staff = document.createElementNS("http://www.w3.org/2000/svg", 'g');
 
-    constructor(major : boolean, startNote : number, scale : Scale){
+    constructor(scale : Scale){
         this.scale = scale;
 
         // create staff
@@ -403,17 +401,17 @@ class Staff {
         let staffMax = this.max - 2;
         let staffCenter = (staffMin + staffMax) / 2;
         
-        let currNote = startNote;
+        let currNote = Scale.startNote;
         let noteLetter;
         for (let i = 0; i < 8; i++) {
             /// visual note element for SVG
             const note = document.createElementNS("http://www.w3.org/2000/svg", 'g');
 
             const ellipse = document.createElementNS("http://www.w3.org/2000/svg", 'ellipse');
-            noteLetter = Staff.NOTES[(currNote + 7) % 7];
+            noteLetter = Scale.NOTES[(currNote + 7) % 7];
 
             // coords of note
-            let x = this.x0 + 11 * (currNote - startNote);
+            let x = this.x0 + 11 * (currNote - Scale.startNote);
             let y = this.y0 - 1.6 * currNote;
 
             ellipse.setAttribute("cx", `${x}`);
@@ -467,11 +465,11 @@ class Staff {
             // add accidentals if necessary
             switch (noteLetter) {
                 case "C":
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 1: // D Major
                         case 2: // E Major
                         case 5: // A Major
-                            if (major) note.append(this.drawSharp(x, y));
+                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
                             break;
                         case 6: // B Major & minor
                             note.append(this.drawSharp(x, y));
@@ -479,30 +477,30 @@ class Staff {
                     }
                     break;
                 case "D": 
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 2: // E Major
                         case 6: // B Major
-                            if (major) note.append(this.drawSharp(x, y));
+                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
                             break;
                         case 3: // f minor
-                            if (!major) note.append(this.drawFlat(x, y));
+                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
                     }
                     break;
                 case "E": 
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 0: // c minor
                         case 3: // f minor
                         case 4: // g minor
-                            if (!major) note.append(this.drawFlat(x, y));
+                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
                             break;
                     }
                     break;
                 case "F":
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 1: // D Major
                         case 4: // G Major
                         case 5: // A Major
-                            if (major) note.append(this.drawSharp(x, y));
+                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
                             break;
                         case 2: // E Major & minor
                         case 6: // B Major & minor
@@ -511,31 +509,31 @@ class Staff {
                     }
                     break;
                 case "G": 
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 2: // E Major
                         case 5: // A Major
                         case 6: // B Major
-                            if (major) note.append(this.drawSharp(x, y));
+                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
                             break;
                     }
                     break;
                 case "A": 
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 6: // B Major
-                            if (major) note.append(this.drawSharp(x, y));
+                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
                             break;
                         case 0: // c minor
                         case 3: // f minor
-                            if (!major) note.append(this.drawFlat(x, y));
+                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
                             break;
                     }
                     break;
                 case "B": 
-                    switch (startNote) {
+                    switch (Scale.startNote) {
                         case 0: // c minor
                         case 1: // d minor
                         case 4: // g minor
-                            if (!major) note.append(this.drawFlat(x, y));
+                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
                             break;
                         case 3: // F Major & minor
                             note.append(this.drawFlat(x, y));
@@ -548,22 +546,14 @@ class Staff {
             if (i != 7){
                 const step = document.createElementNS("http://www.w3.org/2000/svg", 'polyline');
                 // if major, half steps on 3rd and 6th notes
-                if (major) {
-                    if (i == 2 || i == 6) {
-                        step.classList.add("half");
-                    }
-                    else {
-                        step.classList.add("whole");
-                    }
+                if (Scale.isMajor) {
+                    if (i == 2 || i == 6) step.classList.add("half");
+                    else step.classList.add("whole");
                 }
                 // if minor, half steps on 2nd and 5th notes
                 else {
-                    if (i == 1 || i == 4) {
-                        step.classList.add("half");
-                    }
-                    else {
-                        step.classList.add("whole");
-                    }
+                    if (i == 1 || i == 4) step.classList.add("half");
+                    else step.classList.add("whole");
                 }
                 step.setAttribute("points", `${x + 0.6} ${y + 2.2}, 
                     ${x + 5.5} ${y + 6}, 
@@ -572,11 +562,9 @@ class Staff {
                 this.el.append(step);
             }
 
-            note.classList.add("staff");
-            note.classList.add(noteLetter);
+            note.classList.add("staff", noteLetter, "note");
             if(i == 0) note.classList.add("first");
             else if(i == 7) note.classList.add("last");
-            note.classList.add("note");
             this.el.append(note);
 
             currNote++;
@@ -646,13 +634,10 @@ class CodeBlock {
     /// link back to the entire interactive to generate events
     scale : Scale; 
 
-    /// scale notes
-    static readonly NOTES = ["C", "D", "E", "F", "G", "A", "B"];
-
     // x-coord of block
     get x() : number { return 31; }
     // y-coord of block
-    get y() : number { return 97; }
+    get y() : number { return 96; }
     // height of block
     get height() : number { return 44.5; }
     // width of block
@@ -663,7 +648,7 @@ class CodeBlock {
     /// main rectangle
     rect = document.createElementNS("http://www.w3.org/2000/svg", 'rect');
 
-    constructor(major : boolean, startNote : number, scale : Scale) {
+    constructor(scale : Scale) {
         this.scale = scale;
         
         this.rect.setAttribute("x", `${this.x}`);
@@ -676,34 +661,21 @@ class CodeBlock {
         this.rect.setAttribute("fill-opacity", "0.7");
         this.el.append(this.rect);
 
-        let currNote = startNote;
-        let noteNum = startNote + 60;
+        let noteNum = Scale.MIDI[Scale.startNote];
         for (let i = 0; i < 8; i++){
             const t = document.createElementNS("http://www.w3.org/2000/svg", 'text');
             t.setAttribute("x", `${(this.x + this.width) - (this.width / 2) + 0.7}`);
             t.setAttribute("y", `${this.y + 5 + i * 5}`);
             t.setAttribute("dominant-baseline", "central");
             
-            t.innerHTML = `playNote(${noteNum})`;
-            Scale.MIDI[i] = noteNum;
-            // if major, half steps on 3rd and 6th notes
-            if (major) {
-                if (i == 2 || i == 6) noteNum += 1;
-                else noteNum += 2;
-            }
-            // if minor, half steps on 2nd and 5th notes
-            else {
-                if (i == 1 || i == 4) noteNum += 1;
-                else noteNum += 2;
-            }
-            t.classList.add("code");
-            t.classList.add(CodeBlock.NOTES[(currNote + 7) % 7]);
+            // add MIDI number
+            if (Scale.isMajor) t.innerHTML = `playSound(${noteNum + Scale.MAJOR[i]})`;
+            else t.innerHTML = `playSound(${noteNum + Scale.MINOR[i]})`;
+
+            t.classList.add("code", Scale.NOTES[(Scale.startNote + i + 7) % 7], "note");
             if(i == 0) t.classList.add("first");
             else if(i == 7) t.classList.add("last");
-            t.classList.add("note");
             this.el.append(t);
-
-            currNote++;
         }
     }
 }

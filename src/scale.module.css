@@ -38,6 +38,7 @@
     text-anchor: middle;
     text-transform: uppercase;
     user-select: none;
+    pointer-events: none;
 }
 .major-text {
     text-transform: uppercase;
@@ -49,6 +50,7 @@
     font: 3.2px monospace;
     text-anchor: middle;
     user-select: none;
+    pointer-events: none;
 }
 .code {
     font: 4px monospace;
