@@ -60,6 +60,7 @@ export class Scale extends HTMLElement {
         // render SVG content
         this.render(true, true);
 
+        // create grand piano synth
         const patch_url = new URL('/assets/sounds/voices/grand-piano/patch.json', import.meta.url);
         this.synth = new Synthesizer(patch_url);
     }
@@ -75,60 +76,64 @@ export class Scale extends HTMLElement {
         if (note) this.render(false, false);
     }
 
+    // note event listeners
+    /// play sound when note clicked
+    playSound = (e : Event) => {
+        const note = e.currentTarget as Element;
+        let clickedIndex = Scale.NOTES.findIndex((value) => value === note.classList[1]) - Scale.startNote;
+        if (clickedIndex < 0) clickedIndex += 7; 
+        let playSound;
+
+        if (Scale.isMajor) {
+            if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex] + 12;
+            else playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex];  
+        }
+        else {
+            if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex] + 12;
+            else playSound = playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex];
+        }
+        this.synth.playNote(playSound);
+    }
+
+    /// add highlight when note hovered
+    addHover = (e : Event) => {
+        const note = e.currentTarget as Element;
+        
+        let allNotes;
+        if (note.classList.contains("first")){ 
+            allNotes = this.root.querySelectorAll(`.${note.classList[1]}.first, .wheel.${note.classList[1]}`);
+        }
+        else if (note.classList.contains("last")){ 
+            allNotes = this.root.querySelectorAll(`.${note.classList[1]}.last, .wheel.${note.classList[1]}`);
+        }
+        else allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
+        
+        allNotes?.forEach((noteInstance) => {
+            noteInstance.classList.add("hover");
+        });
+    };
+
+    /// remove highlight when note unhovered
+    removeHover = (e : Event) => {
+        const note = e.currentTarget as Element;
+        let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
+        allNotes?.forEach((noteInstance) => {
+            noteInstance.classList.remove("hover");
+        });
+    }
+
     render(first : boolean, updateMaj : boolean) {
         if (this.container == null) return; // only render once mounted
 
-        // note event listeners
-        const playSound = (e : Event) => {
-            const note = e.currentTarget as Element;
-            let clickedIndex = Scale.NOTES.findIndex((value) => value === note.classList[1]) - Scale.startNote;
-            if (clickedIndex < 0) clickedIndex += 7; 
-            let playSound;
-
-            if (Scale.isMajor) {
-                if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex] + 12;
-                else playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex];  
-            }
-            else {
-                if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex] + 12;
-                else playSound = playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex];
-            }
-            this.synth.playNote(playSound);
-        }
-
-        const addHover = (e : Event) => {
-            const note = e.currentTarget as Element;
-            let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
-            
-            if (note.classList.contains("first")){ 
-                allNotes = this.root.querySelectorAll(`.${note.classList[1]}.first, .wheel.${note.classList[1]}`);
-            }
-            else if (note.classList.contains("last")){ 
-                allNotes = this.root.querySelectorAll(`.${note.classList[1]}.last, .wheel.${note.classList[1]}`);
-            }
-            // else, select both first and last note if applicable
-            allNotes?.forEach((noteInstance) => {
-                noteInstance.classList.add("hover");
-            });
-        };
-
-        const removeHover = (e : Event) => {
-            const note = e.currentTarget as Element;
-            let allNotes = this.root.querySelectorAll(`.${note.classList[1]}`);
-            allNotes?.forEach((noteInstance) => {
-                noteInstance.classList.remove("hover");
-            });
-        }
-
         // remove old event listeners
-        this.parent.removeEventListener('click', playSound);
-        this.parent.removeEventListener('pointerleave', addHover);
-        this.parent.removeEventListener('pointerenter', removeHover);
+        this.parent.removeEventListener('click', this.playSound);
+        this.parent.removeEventListener('pointerleave', this.addHover);
+        this.parent.removeEventListener('pointerenter', this.removeHover);
 
         // remove svg elements
         this.parent.innerHTML = "";
         
-        // only render wheel if switching maj/min or new render
+        // only render wheel and button if switching maj/min or first render
         if (updateMaj || first) {
             // generate wheel
             this.wheel = new NoteWheel(this);
@@ -139,7 +144,7 @@ export class Scale extends HTMLElement {
             this.parent.append(this.button.el);
         }
         else {
-            // load existing wheel if it exists
+            // load existing wheel and button if exists
             if (this.wheel) this.parent.append(this.wheel.el);
             if (this.button) this.parent.append(this.button.el);
         }  
@@ -155,9 +160,9 @@ export class Scale extends HTMLElement {
         // add event listeners
         const notes = this.root.querySelectorAll('.note');
         notes?.forEach((note) => {
-            note.addEventListener('click', playSound);
-            note.addEventListener('pointerenter', addHover);
-            note.addEventListener('pointerleave', removeHover);
+            note.addEventListener('click', this.playSound);
+            note.addEventListener('pointerenter', this.addHover);
+            note.addEventListener('pointerleave', this.removeHover);
         });
     }
 }
@@ -244,9 +249,8 @@ class NoteWheel {
         
         // note that starts on offset angle is note after starting note
         let currNote = Scale.startNote + 1;
-        let noteLetter;
         for (let i = 0; i < this.numSectors; i++) {
-            noteLetter = Scale.NOTES[(currNote + 7) % 7];
+            let noteLetter = Scale.NOTES[(currNote + 7) % 7];
             const leftX = this.r * Math.cos(this.angle * (i + 1) + this.offset) + this.cx;
             const leftY = Math.abs(this.r * Math.sin(this.angle * (i + 1) + this.offset) - this.cy);
             const rightX = this.r * Math.cos(this.angle * i + this.offset) + this.cx;
@@ -257,9 +261,7 @@ class NoteWheel {
                 L ${leftX} ${leftY}
                 A ${this.r} ${this.r} 0 0 1 ${rightX} ${rightY}
                 L ${this.cx} ${this.cy}`);
-            path.classList.add("wheel");
-            path.classList.add(noteLetter);
-            path.classList.add("note");
+            path.classList.add("wheel", noteLetter, "note");
             this.wheel.append(path);
 
             const t = document.createElementNS("http://www.w3.org/2000/svg", 'text');
@@ -268,8 +270,10 @@ class NoteWheel {
             t.setAttribute("y", `${((leftY + rightY + this.cy)) / 3}`);
             t.setAttribute("dominant-baseline", "central");
             t.innerHTML = `${noteLetter}`;
+
             if (Scale.isMajor) t.classList.add("major-text");
             else t.classList.add("minor-text");
+
             t.classList.add("wheel-text");
             this.text.append(t);
 
@@ -280,31 +284,23 @@ class NoteWheel {
 
         // add picker
         const picker = document.createElementNS("http://www.w3.org/2000/svg", 'polygon');
-        picker.setAttribute("points", `${this.pickerCoords[0][0]} ${this.pickerCoords[0][1]}, 
-            ${this.pickerCoords[1][0]} ${this.pickerCoords[1][1]}, 
-            ${this.pickerCoords[2][0]} ${this.pickerCoords[2][1]}`);
+        picker.setAttribute("points", `${this.pickerCoords}`);
         picker.setAttribute("fill", "grey");
         picker.setAttribute("fill-opacity", "0.8");
         this.el.append(picker);
 
-        let downX = -1;
-        let downY = -1;
         let totalAngle = 0;
         let lastAngle = 0;
         this.el.addEventListener('pointerdown', (e) => {
             this.down = true;
-            downX = e.clientX;
-            downY = e.clientY;
         });
 
         document.addEventListener('pointermove', (e) => {
             if(this.down){ 
                 // rotate wheel
                 const center = this.svgToScreen(this.cx, this.cy);
-
                 const deltaX = center.x - e.clientX;
                 const deltaY = center.y - e.clientY;
-
                 totalAngle = Math.atan2(deltaY, deltaX) * 180 / Math.PI - lastAngle;
 
                 this.wheel.setAttribute("transform", `rotate(${totalAngle} ${this.cx} ${this.cy})`);
@@ -317,10 +313,12 @@ class NoteWheel {
                 })
             }
 
-            // determine current note
+            // determine current note selected by picker
             const testPoint = this.svgToScreen(50, 18);
             let sectors = this.scale.root.elementsFromPoint(testPoint.x, testPoint.y);
             sectors = sectors.filter((sector) => sector.classList.contains('wheel'));
+            
+            /// if picker touching sector, update selected note
             if (sectors.length > 0) {
                 Scale.startNote = Scale.NOTES.indexOf(sectors[0].classList.item(1)!);
                 scale.update(false, true);
@@ -328,21 +326,17 @@ class NoteWheel {
         });
 
         document.addEventListener('pointerup', (e) => {
-            if (this.down) {
-                this.down = false;
-            }
-            const center = this.svgToScreen(this.cx, this.cy);
+            if (this.down)  this.down = false;
 
+            // save current angle
+            const center = this.svgToScreen(this.cx, this.cy);
             const deltaX = center.x - e.clientX;
             const deltaY = center.y - e.clientY;
-
             lastAngle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
         });
     }
 
-    /**
-     * Transform svg coordinates to screen coordinates
-     */
+    // Transform svg coordinates to screen coordinates
     svgToScreen(svgX : number, svgY : number) {
         const svg = this.scale.container!;
         const p = svg.createSVGPoint();
@@ -385,6 +379,7 @@ class Staff {
             this.staff.append(line);
         }
 
+        // add treble clef
         const clef = document.createElementNS("http://www.w3.org/2000/svg", 'image');
         clef.setAttribute("href", "/assets/images/treble_clef.png");
         clef.setAttribute("x", "0");
@@ -395,7 +390,6 @@ class Staff {
         this.el.append(this.staff);
 
         // create scale
-
         /// y-coord range of staff and center of staff for stems/ledger lines
         let staffMin = this.min + 2;
         let staffMax = this.max - 2;
@@ -438,129 +432,13 @@ class Staff {
             note.append(stem);
 
             // add ledger line if note above/below staff
-            if (y > staffMin || y < staffMax) {
-                const ledger = document.createElementNS("http://www.w3.org/2000/svg", 'line');
-                ledger.setAttribute("x1", `${x - 3}`);
-                ledger.setAttribute("x2", `${x + 2.7}`);
-
-                // placement of ledger line depending if on or between lines
-                if (currNote % 2 == 0){
-                    ledger.setAttribute("y1", `${y + 0.25}`);
-                    ledger.setAttribute("y2", `${y + 0.25}`);
-                }
-                else {
-                    // add line above/below note depending on if above/below staff
-                    if (y < staffMax) {
-                        ledger.setAttribute("y1", `${y + 1.25}`);
-                        ledger.setAttribute("y2", `${y + 1.25}`);
-                    }
-                    else {
-                        ledger.setAttribute("y1", `${y - 1.25}`);
-                        ledger.setAttribute("y2", `${y - 1.25}`);
-                    }
-                }
-                note.append(ledger);
-            }
+            if (y > staffMin || y < staffMax) note.append(this.drawLedger(x, y, staffMax, currNote));
             
-            // add accidentals if necessary
-            switch (noteLetter) {
-                case "C":
-                    switch (Scale.startNote) {
-                        case 1: // D Major
-                        case 2: // E Major
-                        case 5: // A Major
-                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
-                            break;
-                        case 6: // B Major & minor
-                            note.append(this.drawSharp(x, y));
-                            break;
-                    }
-                    break;
-                case "D": 
-                    switch (Scale.startNote) {
-                        case 2: // E Major
-                        case 6: // B Major
-                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
-                            break;
-                        case 3: // f minor
-                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
-                    }
-                    break;
-                case "E": 
-                    switch (Scale.startNote) {
-                        case 0: // c minor
-                        case 3: // f minor
-                        case 4: // g minor
-                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
-                            break;
-                    }
-                    break;
-                case "F":
-                    switch (Scale.startNote) {
-                        case 1: // D Major
-                        case 4: // G Major
-                        case 5: // A Major
-                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
-                            break;
-                        case 2: // E Major & minor
-                        case 6: // B Major & minor
-                            note.append(this.drawSharp(x, y));
-                            break;
-                    }
-                    break;
-                case "G": 
-                    switch (Scale.startNote) {
-                        case 2: // E Major
-                        case 5: // A Major
-                        case 6: // B Major
-                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
-                            break;
-                    }
-                    break;
-                case "A": 
-                    switch (Scale.startNote) {
-                        case 6: // B Major
-                            if (Scale.isMajor) note.append(this.drawSharp(x, y));
-                            break;
-                        case 0: // c minor
-                        case 3: // f minor
-                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
-                            break;
-                    }
-                    break;
-                case "B": 
-                    switch (Scale.startNote) {
-                        case 0: // c minor
-                        case 1: // d minor
-                        case 4: // g minor
-                            if (!Scale.isMajor) note.append(this.drawFlat(x, y));
-                            break;
-                        case 3: // F Major & minor
-                            note.append(this.drawFlat(x, y));
-                            break;
-                    }
-                    break;
-            }
-
-            // add step markers unless on last note
-            if (i != 7){
-                const step = document.createElementNS("http://www.w3.org/2000/svg", 'polyline');
-                // if major, half steps on 3rd and 6th notes
-                if (Scale.isMajor) {
-                    if (i == 2 || i == 6) step.classList.add("half");
-                    else step.classList.add("whole");
-                }
-                // if minor, half steps on 2nd and 5th notes
-                else {
-                    if (i == 1 || i == 4) step.classList.add("half");
-                    else step.classList.add("whole");
-                }
-                step.setAttribute("points", `${x + 0.6} ${y + 2.2}, 
-                    ${x + 5.5} ${y + 6}, 
-                    ${x + 5.5} ${y + 6}, 
-                    ${x + 10.4} ${y + 0.6}`);
-                this.el.append(step);
-            }
+            // add accidental if necessary
+            this.addAccidental(noteLetter, note, x, y);
+            
+            // add step marker unless on last note
+            if (i != 7) this.el.append(this.drawSteps(i, x, y));
 
             note.classList.add("staff", noteLetter, "note");
             if(i == 0) note.classList.add("first");
@@ -568,6 +446,111 @@ class Staff {
             this.el.append(note);
 
             currNote++;
+        }
+    }
+
+    drawLedger(x : number, y : number, staffMax : number, currNote: number) {
+        const ledger = document.createElementNS("http://www.w3.org/2000/svg", 'line');
+        ledger.setAttribute("x1", `${x - 3}`);
+        ledger.setAttribute("x2", `${x + 2.7}`);
+
+        // placement of ledger line depending if on or between lines
+        if (currNote % 2 == 0){
+            ledger.setAttribute("y1", `${y + 0.25}`);
+            ledger.setAttribute("y2", `${y + 0.25}`);
+        }
+        else {
+            // add line above/below note depending on if above/below staff
+            if (y < staffMax) {
+                ledger.setAttribute("y1", `${y + 1.25}`);
+                ledger.setAttribute("y2", `${y + 1.25}`);
+            }
+            else {
+                ledger.setAttribute("y1", `${y - 1.25}`);
+                ledger.setAttribute("y2", `${y - 1.25}`);
+            }
+        }
+        return ledger;
+    }
+
+    addAccidental(noteLetter: string, note : SVGGElement, x : number, y : number) {
+        switch (noteLetter) {
+            case "C":
+                switch (Scale.startNote) {
+                    case 1: // D Major
+                    case 2: // E Major
+                    case 5: // A Major
+                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        break;
+                    case 6: // B Major & minor
+                        note.append(this.drawSharp(x, y));
+                        break;
+                }
+                break;
+            case "D": 
+                switch (Scale.startNote) {
+                    case 2: // E Major
+                    case 6: // B Major
+                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        break;
+                    case 3: // f minor
+                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                }
+                break;
+            case "E": 
+                switch (Scale.startNote) {
+                    case 0: // c minor
+                    case 3: // f minor
+                    case 4: // g minor
+                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        break;
+                }
+                break;
+            case "F":
+                switch (Scale.startNote) {
+                    case 1: // D Major
+                    case 4: // G Major
+                    case 5: // A Major
+                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        break;
+                    case 2: // E Major & minor
+                    case 6: // B Major & minor
+                        note.append(this.drawSharp(x, y));
+                        break;
+                }
+                break;
+            case "G": 
+                switch (Scale.startNote) {
+                    case 2: // E Major
+                    case 5: // A Major
+                    case 6: // B Major
+                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        break;
+                }
+                break;
+            case "A": 
+                switch (Scale.startNote) {
+                    case 6: // B Major
+                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        break;
+                    case 0: // c minor
+                    case 3: // f minor
+                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        break;
+                }
+                break;
+            case "B": 
+                switch (Scale.startNote) {
+                    case 0: // c minor
+                    case 1: // d minor
+                    case 4: // g minor
+                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        break;
+                    case 3: // F Major & minor
+                        note.append(this.drawFlat(x, y));
+                        break;
+                }
+                break;
         }
     }
 
@@ -627,6 +610,25 @@ class Staff {
         flat.append(curve); 
 
         return flat;
+    }
+
+    drawSteps(i : number, x : number, y : number) {
+        const step = document.createElementNS("http://www.w3.org/2000/svg", 'polyline');
+        // if major, half steps on 3rd and 6th notes
+        if (Scale.isMajor) {
+            if (i == 2 || i == 6) step.classList.add("half");
+            else step.classList.add("whole");
+        }
+        // if minor, half steps on 2nd and 5th notes
+        else {
+            if (i == 1 || i == 4) step.classList.add("half");
+            else step.classList.add("whole");
+        }
+        step.setAttribute("points", `${x + 0.6} ${y + 2.2}, 
+            ${x + 5.5} ${y + 6}, 
+            ${x + 5.5} ${y + 6}, 
+            ${x + 10.4} ${y + 0.6}`);
+        return step;
     }
 }
 
