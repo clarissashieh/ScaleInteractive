@@ -41,6 +41,9 @@ export class Scale extends HTMLElement {
     /// note wheel element
     private wheel : NoteWheel | null = null;
 
+    /// current note sound
+    private currNoteSound : number = -1;
+
     /// button element
     private button : MajMinButton | null = null;
     constructor() {
@@ -82,17 +85,20 @@ export class Scale extends HTMLElement {
         const note = e.currentTarget as Element;
         let clickedIndex = Scale.NOTES.findIndex((value) => value === note.classList[1]) - Scale.startNote;
         if (clickedIndex < 0) clickedIndex += 7; 
-        let playSound;
 
         if (Scale.isMajor) {
-            if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex] + 12;
-            else playSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex];  
+            if (note.classList.contains("last")) this.currNoteSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex] + 12;
+            else this.currNoteSound = Scale.MIDI[Scale.startNote] + Scale.MAJOR[clickedIndex];  
         }
         else {
-            if (note.classList.contains("last")) playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex] + 12;
-            else playSound = playSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex];
+            if (note.classList.contains("last")) this.currNoteSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex] + 12;
+            else this.currNoteSound = this.currNoteSound = Scale.MIDI[Scale.startNote] + Scale.MINOR[clickedIndex];
         }
-        this.synth.playNote(playSound);
+        this.synth.playNote(this.currNoteSound);
+    }
+
+    stopSound = (e : Event) => {
+        this.synth.releaseNote(this.currNoteSound);
     }
 
     /// add highlight when note hovered
@@ -126,7 +132,8 @@ export class Scale extends HTMLElement {
         if (this.container == null) return; // only render once mounted
 
         // remove old event listeners
-        this.parent.removeEventListener('click', this.playSound);
+        this.parent.removeEventListener('pointerdown', this.playSound);
+        this.parent.removeEventListener('pointerup', this.stopSound);
         this.parent.removeEventListener('pointerleave', this.addHover);
         this.parent.removeEventListener('pointerenter', this.removeHover);
 
@@ -160,7 +167,8 @@ export class Scale extends HTMLElement {
         // add event listeners
         const notes = this.root.querySelectorAll('.note');
         notes?.forEach((note) => {
-            note.addEventListener('click', this.playSound);
+            note.addEventListener('pointerdown', this.playSound);
+            note.addEventListener('pointerup', this.stopSound);
             note.addEventListener('pointerenter', this.addHover);
             note.addEventListener('pointerleave', this.removeHover);
         });
