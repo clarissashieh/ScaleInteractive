@@ -30,6 +30,7 @@ export class Scale extends HTMLElement {
 
     /// scale notes
     static readonly NOTES = ["C", "D", "E", "F", "G", "A", "B"];
+    static ACCIDENTALS : string[];
 
     /// corresponding MIDI numbers
     static readonly MIDI = [60, 62, 64, 65, 67, 69, 71, 72];
@@ -139,6 +140,7 @@ export class Scale extends HTMLElement {
 
         // remove svg elements
         this.parent.innerHTML = "";
+        Scale.ACCIDENTALS = ["", "", "", "", "", "", ""];
 
         // only render wheel and button if switching maj/min or first render
         if (updateMaj || first) {
@@ -450,7 +452,8 @@ class Staff {
             if (y > staffMin || y < staffMax) note.append(this.drawLedger(x, y, staffMax, currNote));
 
             // add accidental if necessary
-            this.addAccidental(noteLetter, note, x, y);
+            const acc = this.addAccidental(noteLetter, note, x, y);
+            if (acc) Scale.ACCIDENTALS[i] = acc;
 
             // add step marker unless on last note
             if (i != 7) this.el.append(this.drawSteps(i, x, y));
@@ -495,21 +498,30 @@ class Staff {
                     case 1: // D Major
                     case 2: // E Major
                     case 5: // A Major
-                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        if (Scale.isMajor) {
+                            note.append(this.drawSharp(x, y));
+                            return "s";
+                        }
                         break;
                     case 6: // B Major & minor
                         note.append(this.drawSharp(x, y));
-                        break;
+                        return "s";
                 }
                 break;
             case "D":
                 switch (Scale.startNote) {
                     case 2: // E Major
                     case 6: // B Major
-                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        if (Scale.isMajor) { 
+                            note.append(this.drawSharp(x, y));
+                            return "s";
+                        }
                         break;
                     case 3: // f minor
-                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        if (!Scale.isMajor){ 
+                            note.append(this.drawFlat(x, y));
+                            return "f";
+                        }
                 }
                 break;
             case "E":
@@ -517,7 +529,10 @@ class Staff {
                     case 0: // c minor
                     case 3: // f minor
                     case 4: // g minor
-                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        if (!Scale.isMajor){ 
+                            note.append(this.drawFlat(x, y));
+                            return "f";
+                        }
                         break;
                 }
                 break;
@@ -526,11 +541,15 @@ class Staff {
                     case 1: // D Major
                     case 4: // G Major
                     case 5: // A Major
-                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        if (Scale.isMajor){ 
+                            note.append(this.drawSharp(x, y));
+                            return "s";
+                        }
                         break;
                     case 2: // E Major & minor
                     case 6: // B Major & minor
                         note.append(this.drawSharp(x, y));
+                        return "s";
                         break;
                 }
                 break;
@@ -539,18 +558,27 @@ class Staff {
                     case 2: // E Major
                     case 5: // A Major
                     case 6: // B Major
-                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        if (Scale.isMajor){ 
+                            note.append(this.drawSharp(x, y));
+                            return "s";
+                        }
                         break;
                 }
                 break;
             case "A":
                 switch (Scale.startNote) {
                     case 6: // B Major
-                        if (Scale.isMajor) note.append(this.drawSharp(x, y));
+                        if (Scale.isMajor){ 
+                            note.append(this.drawSharp(x, y));
+                            return "s";
+                        }
                         break;
                     case 0: // c minor
                     case 3: // f minor
-                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        if (!Scale.isMajor){ 
+                            note.append(this.drawFlat(x, y));
+                            return "f";
+                        }
                         break;
                 }
                 break;
@@ -559,11 +587,14 @@ class Staff {
                     case 0: // c minor
                     case 1: // d minor
                     case 4: // g minor
-                        if (!Scale.isMajor) note.append(this.drawFlat(x, y));
+                        if (!Scale.isMajor){ 
+                            note.append(this.drawFlat(x, y));
+                            return "f";
+                        }
                         break;
                     case 3: // F Major & minor
                         note.append(this.drawFlat(x, y));
-                        break;
+                        return "f";
                 }
                 break;
         }
@@ -652,13 +683,13 @@ class CodeBlock {
     scale : Scale;
 
     // x-coord of block
-    get x() : number { return 31; }
+    get x() : number { return 26.5; }
     // y-coord of block
     get y() : number { return 96; }
     // height of block
-    get height() : number { return 44.5; }
+    get height() : number { return 45; }
     // width of block
-    get width() : number { return 38; }
+    get width() : number { return 47.5; }
 
     /// visual element for SVG
     el = document.createElementNS("http://www.w3.org/2000/svg", 'g');
@@ -681,9 +712,19 @@ class CodeBlock {
         let noteNum = Scale.MIDI[Scale.startNote];
         for (let i = 0; i < 8; i++){
             const t = document.createElementNS("http://www.w3.org/2000/svg", 'text');
-            t.setAttribute("x", `${(this.x + this.width) - (this.width / 2) + 0.7}`);
+            t.setAttribute("x", `${(this.x + this.width) - (this.width / 2) - 4.5}`);
             t.setAttribute("y", `${this.y + 5 + i * 5}`);
             t.setAttribute("dominant-baseline", "central");
+
+            const comment = document.createElementNS("http://www.w3.org/2000/svg", 'text');
+            comment.setAttribute("x", `${(this.x + this.width) - (this.width / 2) + 12.5}`);
+            comment.setAttribute("y", `${this.y + 6.3 + i * 5}`);
+
+            if (Scale.ACCIDENTALS[i] == "s") comment.innerHTML = `# ${Scale.NOTES[(Scale.startNote + i + 7) % 7]}&#x266F`
+            else if (Scale.ACCIDENTALS[i] == "f") comment.innerHTML = `# ${Scale.NOTES[(Scale.startNote + i + 7) % 7]}&#9837`
+            else comment.innerHTML = `# ${Scale.NOTES[(Scale.startNote + i + 7) % 7]}`;
+            comment.classList.add("comment");
+            this.el.append(comment);
 
             // add MIDI number
             if (Scale.isMajor) t.innerHTML = `playSound(${noteNum + Scale.MAJOR[i]})`;

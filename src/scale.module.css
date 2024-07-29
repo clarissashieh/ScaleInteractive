@@ -57,6 +57,13 @@
     stroke-width: 0;
     text-anchor: middle;
 }
+.comment {
+    font: 4px monospace;
+    stroke-width: 0;
+    fill: grey;
+    stroke: grey;
+    text-anchor: left;
+}
 
 /* Notes */
 .C {
