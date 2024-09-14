@@ -12,7 +12,7 @@ export default {
         {
             file : './assets/js/tunepad-interactives.min.js',
             format : 'iife',
-            name : 'TunePadInteractives',
+            name : 'ScaleInteractive',
             sourcemap : true,
             plugins : [terser ()]
         }
