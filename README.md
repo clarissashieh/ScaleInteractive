@@ -14,4 +14,6 @@ Builds connection between musical scales and Python code.
   
 * Click on each note on music staff to hear how it sounds.
   
-* Below music staff displays Python code needed to code the scale in TunePad along with comments of each note name the line codes. 
+* Below music staff displays Python code needed to code the scale in TunePad along with comments of each note name the line codes.
+
+Supplementary tutorial about scales: https://drive.google.com/file/d/1KM8BcYd5OG9bd9nwEBSxatftz-9160wP/view
