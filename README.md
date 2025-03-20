@@ -2,6 +2,8 @@ Scale Interactive built off of code for TunePad learning site interactives built
 
 Builds connection between musical scales and Python code.
 
+** Linked site is outdated—wheel rotation issue is fixed**
+
 <p align="center">
   <img width="411" alt="Screenshot 2024-09-13 at 11 11 38 PM" src="https://github.com/user-attachments/assets/3a008fa4-e122-47e3-b59f-0a47a071ccf1">
 </p>
